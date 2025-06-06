@@ -32,7 +32,9 @@ exports.register = async (req, res) => {
       verificationToken
     });
 
+    console.log('Before save - user.verificationToken:', user.verificationToken);
     await user.save();
+    console.log('After save - user.verificationToken:', user.verificationToken);
 
     // Send verification email
     const verificationUrl = `${process.env.FRONTEND_URL}/verify/${verificationToken}`;
@@ -86,6 +88,37 @@ exports.login = async (req, res) => {
       }
     });
   } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+exports.verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.params;
+    console.log('Backend received token:', token);
+
+    let user = await User.findOne({ verificationToken: token });
+    console.log('User found with token:', user);
+
+    if (!user) {
+      // If no user found with this token, it might be already verified or an invalid token.
+      // We can't directly check if the user is verified without their email.
+      // For now, we'll return the existing error message, but this is where we'd add more logic
+      // if we had a way to identify the user without the token.
+      return res.status(400).json({ message: 'Invalid or expired verification token' });
+    }
+
+    if (user.isVerified) {
+      return res.status(200).json({ message: 'Email is already verified.' });
+    }
+
+    user.isVerified = true;
+    user.verificationToken = undefined; // Clear the token after verification
+    await user.save();
+
+    res.status(200).json({ message: 'Email verified successfully' });
+  } catch (error) {
+    console.error('Backend verification error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };

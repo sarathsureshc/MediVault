@@ -32,6 +32,18 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  weight: {
+    type: Number,
+    default: 0
+  },
+  height: {
+    type: Number,
+    default: 0
+  },
+  bloodGroup: {
+    type: String,
+    default: ''
+  },
   isVerified: {
     type: Boolean,
     default: false

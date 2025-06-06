@@ -14,7 +14,7 @@ exports.getUserProfile = async (req, res) => {
 
 exports.updateUserProfile = async (req, res) => {
   try {
-    const { name, phone, address, bloodGroup, emergencyContact } = req.body;
+    const { name, phone, address, bloodGroup, emergencyContact, weight, height } = req.body;
     
     const user = await User.findById(req.user.id);
     if (!user) {
@@ -26,6 +26,8 @@ exports.updateUserProfile = async (req, res) => {
     user.address = address || user.address;
     user.bloodGroup = bloodGroup || user.bloodGroup;
     user.emergencyContact = emergencyContact || user.emergencyContact;
+    user.weight = weight || user.weight; // Add weight
+    user.height = height || user.height; // Add height
 
     const updatedUser = await user.save();
     res.json(updatedUser);
