@@ -14,18 +14,42 @@ import { globalErrorHandler } from "./middlewares/errorHandler";
 
 const app: Application = express();
 
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(
-  cors({
-    origin: config.corsOrigin,
-    credentials: true,
-  })
-);
-app.use(helmet());
+// CORS Middleware
+const allowedOrigins = [
+  ...(Array.isArray(config.corsOrigin) ? config.corsOrigin : [config.corsOrigin]),
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "https://medivaultdashboard.netlify.app",
+];
+
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const cleanOrigin = origin.replace(/\/$/, "");
+    if (
+      allowedOrigins.includes("*") ||
+      allowedOrigins.includes(cleanOrigin) ||
+      cleanOrigin.endsWith(".netlify.app") ||
+      cleanOrigin.includes("localhost") ||
+      cleanOrigin.includes("127.0.0.1")
+    ) {
+      return callback(null, true);
+    }
+    return callback(new Error(`Origin ${origin} not allowed by CORS`));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "Cookie", "X-Requested-With", "Accept"],
+  exposedHeaders: ["Set-Cookie"],
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
+app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(morgan("dev"));
 app.use(cookieParser());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Routes
 import appointmentRoutes from "./routes/appointment.routes";
