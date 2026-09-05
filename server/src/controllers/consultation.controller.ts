@@ -50,11 +50,7 @@ export const getPatientConsultations = catchAsync(
     if (req.user?.role === "patient") {
       const patient = await Patient.findOne({ user: req.user._id });
       if (!patient || patient.patientID !== patientId) {
-        // Allow if they are requesting their own ID, but patientId param might be internal ID or public ID.
-        // Let's assume patientId param is the public patientID string.
-        if (patient?.patientID !== patientId) {
-          return next(new AppError("You can only view your own history", 403));
-        }
+        return next(new AppError("You can only view your own consultations", 403));
       }
     }
 

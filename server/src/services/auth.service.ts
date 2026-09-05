@@ -78,14 +78,22 @@ export const loginUser = async (email: string, password: string) => {
     throw new AppError("Incorrect email or password", 401);
   }
 
-  // 2. Check verification
+  // 2. Check if user is blocked / suspended for malpractice
+  if (user.isBlocked) {
+    throw new AppError(
+      `Your account has been suspended by administration. Reason: ${user.blockReason || "Malpractice or regulatory violation"}`,
+      403
+    );
+  }
+
+  // 3. Check verification
   if (!user.isVerified) {
     // Resend OTP? Or just tell them to verify.
     // Let's assume we want them to verify.
     throw new AppError("Account not verified. Please verify OTP.", 401);
   }
 
-  // 3. Generate tokens
+  // 4. Generate tokens
   const accessToken = signToken(user._id.toString());
   const refreshToken = signRefreshToken(user._id.toString());
 
@@ -99,6 +107,13 @@ export const verifyUserOTP = async (email: string, otp: string) => {
 
   const user = await User.findOne({ email });
   if (!user) throw new AppError("User not found", 404);
+
+  if (user.isBlocked) {
+    throw new AppError(
+      `Your account has been suspended by administration. Reason: ${user.blockReason || "Malpractice or regulatory violation"}`,
+      403
+    );
+  }
 
   user.isVerified = true;
   await user.save({ validateBeforeSave: false });

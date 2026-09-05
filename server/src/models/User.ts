@@ -3,9 +3,13 @@ import bcrypt from "bcryptjs";
 
 export interface IUser extends Document {
   email: string;
+  phone?: string;
   password?: string;
   role: "patient" | "doctor" | "lab" | "pharmacy" | "admin";
   isVerified: boolean;
+  isBlocked?: boolean;
+  blockReason?: string;
+  blockedAt?: Date;
   googleId?: string;
   profileId?: mongoose.Types.ObjectId; // Reference to specific role profile
   createdAt: Date;
@@ -22,6 +26,7 @@ const userSchema = new Schema<IUser>(
       lowercase: true,
       trim: true,
     },
+    phone: { type: String, trim: true },
     password: { type: String, select: false },
     role: {
       type: String,
@@ -29,10 +34,11 @@ const userSchema = new Schema<IUser>(
       required: true,
     },
     isVerified: { type: Boolean, default: false },
+    isBlocked: { type: Boolean, default: false },
+    blockReason: { type: String },
+    blockedAt: { type: Date },
     googleId: { type: String },
-    profileId: { type: Schema.Types.ObjectId, refPath: "role" }, // Dynamic reference based on role? Or just handle manually.
-    // Actually, refPath might be tricky if role is lowercase string and model names are Capitalized.
-    // Let's just store profileId and handle population manually or use a consistent naming convention.
+    profileId: { type: Schema.Types.ObjectId, refPath: "role" },
   },
   { timestamps: true }
 );

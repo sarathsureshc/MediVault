@@ -8,15 +8,45 @@ import { OTP } from "../models/OTP";
 import { sendEmail } from "../services/email.service";
 import bcrypt from "bcryptjs";
 import { DoctorAvailability } from "../models/DoctorAvailability";
+import { Appointment } from "../models/Appointment";
+import { Consultation } from "../models/Consultation";
 
 export const getDashboardStats = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
-    // Placeholder for stats
+    const doctor = await Doctor.findOne({ user: (req as any).user?._id });
+    if (!doctor) {
+      return next(new AppError("Doctor profile not found", 404));
+    }
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const [todayAppointments, totalAppointments, pendingAppointments, totalConsultations] =
+      await Promise.all([
+        Appointment.countDocuments({
+          doctor: doctor._id,
+          date: { $gte: startOfToday, $lte: endOfToday },
+        }),
+        Appointment.countDocuments({ doctor: doctor._id }),
+        Appointment.countDocuments({ doctor: doctor._id, status: "pending" }),
+        Consultation.countDocuments({ doctor: doctor._id }),
+      ]);
+
+    // Distinct patients
+    const distinctPatients = await Consultation.distinct("patient", {
+      doctor: doctor._id,
+    });
+
     res.status(200).json({
       success: true,
       data: {
-        appointments: 0,
-        patients: 0,
+        todayAppointments,
+        totalAppointments,
+        pendingAppointments,
+        totalConsultations,
+        totalPatients: distinctPatients.length,
       },
     });
   }
@@ -75,9 +105,8 @@ export const verifyPatient = catchAsync(
       data: {
         patientId: patient.patientID,
         name: patient.fullName,
-        // For development/demo purposes only, returning OTP in response
-        // Remove this in production!
-        devOtp: otp,
+        // Only return devOtp in non-production development testing
+        devOtp: process.env.NODE_ENV === "development" ? otp : undefined,
       },
     });
   }
@@ -113,7 +142,6 @@ export const verifyOTP = catchAsync(
     // Check each OTP record to find a match
     let validOTP = null;
     for (const record of otpRecords) {
-      const bcrypt = require("bcryptjs");
       const isMatch = await bcrypt.compare(otp, record.otp);
       if (isMatch) {
         validOTP = record;
@@ -164,7 +192,7 @@ export const getPatientHistory = catchAsync(
           id: patient.patientID,
           age: age,
           gender: patient.gender || "Unknown",
-          bloodGroup: "Unknown", // Field missing in model
+          bloodGroup: patient.bloodGroup || "Unknown",
         },
         history: patient.medicalHistory || {
           allergies: [],

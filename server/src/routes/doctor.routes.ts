@@ -24,9 +24,5 @@ router.get("/patients/:id/history", doctorController.getPatientHistory);
 // Availability management
 router.post("/availability", doctorController.addAvailability);
 router.get("/my-availability", doctorController.getMyAvailability);
-router.get("/:doctorId/availability", doctorController.getDoctorAvailability);
-
-// List all doctors (for patients to book)
-router.get("/", doctorController.getAllDoctors);
 
 export default router;

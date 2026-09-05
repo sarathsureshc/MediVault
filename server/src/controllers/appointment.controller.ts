@@ -4,6 +4,8 @@ import { Appointment } from "../models/Appointment";
 import { Notification } from "../models/Notification";
 import { AppError } from "../utils/AppError";
 import { Doctor } from "../models/Doctor";
+import { Patient } from "../models/Patient";
+import { DoctorAvailability } from "../models/DoctorAvailability";
 
 export const bookAppointment = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -11,7 +13,6 @@ export const bookAppointment = catchAsync(
     const userId = (req as any).user._id;
 
     // Find patient profile
-    const Patient = require("../models/Patient").Patient;
     const patient = await Patient.findOne({ user: userId });
     if (!patient) {
       throw new AppError("Patient profile not found", 404);
@@ -28,8 +29,6 @@ export const bookAppointment = catchAsync(
     appointmentDate.setHours(0, 0, 0, 0);
 
     // Find availability for the doctor on this date
-    const DoctorAvailability =
-      require("../models/DoctorAvailability").DoctorAvailability;
     const availability = await DoctorAvailability.findOne({
       doctor: doctorId,
       date: appointmentDate,
@@ -97,7 +96,6 @@ export const getMyAppointments = catchAsync(
 
     try {
       if (role === "patient") {
-        const Patient = require("../models/Patient").Patient;
         const patientProfile = await Patient.findOne({ user: userId });
         if (!patientProfile) {
           return res.status(200).json({
@@ -157,16 +155,27 @@ export const updateAppointmentStatus = catchAsync(
       throw new AppError("Appointment not found", 404);
     }
 
+    // Verify Doctor Ownership if requester is a doctor
+    if (req.user?.role === "doctor") {
+      const doctor = await Doctor.findOne({ user: req.user._id });
+      if (!doctor || appointment.doctor.toString() !== doctor._id.toString()) {
+        return next(new AppError("You are not authorized to modify this appointment", 403));
+      }
+    }
+
     appointment.status = status;
     await appointment.save();
 
-    // Notify Patient
-    await Notification.create({
-      user: appointment.patient,
-      message: `Your appointment status has been updated to: ${status}`,
-      type: "booking",
-      relatedId: appointment._id,
-    });
+    // Find patient to get their user ID for notification
+    const patient = await Patient.findById(appointment.patient);
+    if (patient) {
+      await Notification.create({
+        user: patient.user,
+        message: `Your appointment status has been updated to: ${status}`,
+        type: "booking",
+        relatedId: appointment._id,
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -184,7 +193,6 @@ export const payAppointment = catchAsync(
     }
 
     // Verify patient profile
-    const Patient = require("../models/Patient").Patient;
     const patientProfile = await Patient.findOne({ user: (req as any).user?._id });
     if (!patientProfile || appointment.patient.toString() !== patientProfile._id.toString()) {
       return next(new AppError("Not authorized to pay for this appointment", 403));

@@ -1,6 +1,5 @@
 import { OTP } from "../models/OTP";
 import { sendEmail } from "./email.service";
-import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { AppError } from "../utils/AppError";
 
@@ -8,42 +7,75 @@ export const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-export const sendOTP = async (email: string) => {
-  // 1. Check rate limit (optional, can be done in middleware or here)
-  // 2. Generate OTP
+export const sendOTP = async (identifier: string, channel: "email" | "phone" = "email") => {
+  const cleanIdentifier = identifier.trim().toLowerCase();
+  const isEmail = cleanIdentifier.includes("@") || channel === "email";
+
   const otp = generateOTP();
 
-  // 3. Save to DB (hashed)
-  // We hash it in the model pre-save hook, so just save plain here?
-  // Wait, if I save plain, the pre-save hook hashes it.
-  // But I need to send the PLAIN otp to the user.
+  // Save to DB (hashed by model pre-save hook)
+  await OTP.create({
+    identifier: cleanIdentifier,
+    email: isEmail ? cleanIdentifier : undefined,
+    phone: !isEmail ? cleanIdentifier : undefined,
+    otp,
+  });
 
-  await OTP.create({ email, otp });
+  if (isEmail) {
+    try {
+      await sendEmail(
+        cleanIdentifier,
+        "Your MEDIVAULT Verification Code",
+        `Your MEDIVAULT security OTP is: ${otp}. It is valid for 5 minutes. If you did not request this, please ignore this message.`
+      );
+    } catch (err) {
+      console.warn(`[OTP Service] Failed to send email to ${cleanIdentifier}:`, err);
+    }
+  } else {
+    // In production, integrate SMS provider (e.g. Twilio / Fast2SMS).
+    console.log(`[OTP SMS Service] Dispatched OTP ${otp} to phone: ${cleanIdentifier}`);
+  }
 
-  // 4. Send via Email
-  await sendEmail(
-    email,
-    "Your MEDIVAULT Verification Code",
-    `Your OTP is: ${otp}. It is valid for 5 minutes.`
-  );
+  // Return dev OTP in non-production environments
+  const isDev = process.env.NODE_ENV !== "production";
+  return {
+    success: true,
+    identifier: cleanIdentifier,
+    channel: isEmail ? "email" : "phone",
+    devOtp: isDev ? otp : undefined,
+  };
 };
 
-export const verifyOTP = async (email: string, otp: string) => {
-  // 1. Find OTP record
-  const otpRecord = await OTP.findOne({ email }).sort({ createdAt: -1 });
+export const verifyOTP = async (identifier: string, otp: string) => {
+  const cleanIdentifier = identifier.trim().toLowerCase();
+
+  // Find most recent OTP record matching identifier, email, or phone
+  const otpRecord = await OTP.findOne({
+    $or: [
+      { identifier: cleanIdentifier },
+      { email: cleanIdentifier },
+      { phone: cleanIdentifier },
+    ],
+  }).sort({ createdAt: -1 });
 
   if (!otpRecord) {
-    throw new AppError("Invalid or expired OTP", 400);
+    throw new AppError("Invalid or expired OTP. Please request a new verification code.", 400);
   }
 
-  // 2. Verify hash
-  const isValid = await bcrypt.compare(otp, otpRecord.otp);
+  // Verify hash
+  const isValid = await bcrypt.compare(otp.trim(), otpRecord.otp);
   if (!isValid) {
-    throw new AppError("Invalid OTP", 400);
+    throw new AppError("Invalid verification code. Please check and try again.", 400);
   }
 
-  // 3. Delete OTP (prevent reuse)
-  await OTP.deleteOne({ _id: otpRecord._id });
+  // Delete all OTPs for this identifier to prevent replay attacks
+  await OTP.deleteMany({
+    $or: [
+      { identifier: cleanIdentifier },
+      { email: cleanIdentifier },
+      { phone: cleanIdentifier },
+    ],
+  });
 
   return true;
 };

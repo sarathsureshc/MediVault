@@ -30,6 +30,7 @@ app.use(cookieParser());
 // Routes
 import appointmentRoutes from "./routes/appointment.routes";
 import notificationRoutes from "./routes/notification.routes";
+import adminRoutes from "./routes/admin.routes";
 
 // ... imports
 
@@ -42,6 +43,16 @@ app.use("/api/v1/labs", labRoutes);
 app.use("/api/v1/pharmacies", pharmacyRoutes);
 app.use("/api/v1/appointments", appointmentRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/v1/admin", adminRoutes);
+
+app.get("/api/v1/health", (req: Request, res: Response) => {
+  res.status(200).json({
+    success: true,
+    status: "alive",
+    timestamp: new Date().toISOString(),
+    service: "MediVault Core Engine",
+  });
+});
 
 app.get("/", (req: Request, res: Response) => {
   res.status(200).json({

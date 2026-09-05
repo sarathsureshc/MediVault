@@ -44,7 +44,15 @@ export const protect = catchAsync(
       );
     }
 
-    // 4. Check if user changed password after the token was issued (optional)
+    // 4. Check if user is blocked / suspended for malpractice
+    if (currentUser.isBlocked) {
+      return next(
+        new AppError(
+          `Your account has been suspended by administration. Reason: ${currentUser.blockReason || "Compliance/Malpractice Violation"}`,
+          403
+        )
+      );
+    }
 
     // Grant access
     req.user = currentUser;
